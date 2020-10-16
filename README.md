@@ -1,3 +1,163 @@
+# Amazon Sumerian Hosts (Polly Optimized)
+This fork modifies the Amazon Sumerian Hosts repository by providing (optional) additional Config properties that allow the user to reference the Audio File and the Speech Marks when calling the `host.TextToSpeechFeature.play` function. 
+
+## Why would you want that?
+This was driven by a customer project that had a large number of users interacting with Amazon Sumerian Hosts and as such the cost of interacting with Amazon Polly grew significantly. Since the text is mostly static (doesn't change) we realized that we can optimize the costs of Polly by pre-processing the Audio File (MP3) and the Speech Marks (JSON), store them on Amazon S3, and have the client download them and use them (Amazon S3 costs are quite cheap in comparison to Amazon Polly and can be further optimized by serving them through CloudFront). We saved the customer roughly about 90% of their AWS costs by preprocessing, storing, and caching content at S3/CloudFront instead of querying Amazon Polly for every user.
+
+## How do I install it?
+```npm install amazon-sumerian-hosts-polly-optimized```
+
+## How does it work?
+Pass in the two optional flags into the function call as such:
+
+```javascript
+///
+/// ... initialize host here ...
+///
+
+/** 
+ * Make sure to replace text with a unique string per audioURL and speechMarksJSON, you can keep this as the text you used to play but note that it actually won't be played as the preprocessed audio and speechMarks will be played instead.
+ * Make sure to replace speechMarksJSON with the preprocessed SpeechMarks JSON Array.
+ * Make sure to replace audioURL with a Blob URL of the preprocessed Audio file
+**/
+host.TextToSpeechFeature.play(text, {
+  SpeechMarksJSON: speechMarksJSON,   
+  AudioURL: audioURL
+});
+```
+As an example, to have the host speak the following SSML:
+```
+<speak>Hello, I am a Sumerian Host powered using a preprocessed MP3 file and SpeechMarks.</speak>
+```
+I have already preprocessed the necessary Audio file and SpeechMarks and placed them under the examples/assets/preprocessed/ folder so you should be able to use them in your code.
+
+```javascript
+// Specify local paths
+// Make sure to update them to where you copy them into under your public/root folder
+const speechMarksPath = './examples/assets/preprocessed/exampleSpeechMark.json';
+const audioPath = "./examples/assets/preprocessed/exampleAudio.mp3";
+
+// Fetch resources
+const speechMarksJSON = await(await fetch(speechMarksPath)).json();
+const audioBlob = await(await fetch(audioPath)).blob();
+
+// Create Audio Blob URL
+const audioURL = URL.createObjectURL(audioBlob);
+
+// Play speech with local assets
+host.TextToSpeechFeature.play('Hello, I am a Sumerian Host powered using a preprocessed MP3 file and SpeechMarks', {
+  SpeechMarksJSON: speechMarksJSON,
+  AudioURL: audioURL
+});
+```
+If the two properties, `SpeechMarksJSON` and `AudioURL`, aren't specified it will work as it used to work (interact with Polly) but if you are using static text often I highly recommend preprocessing the speechmarks and audio files and cache them on S3/CloudFront for major cost optimization.
+
+## How do I preprocess the necessary files?
+I highly recommend preprocessing the files and storing them on Amazon S3 (and serve them through CloudFront) or serve them as part of the web application.
+
+In order to do so, there are two main files that need to preprocessed.
+1. Audio file: The audio file will be played by the host and can be either preprocessed using the AWS SDK or by downloading the MP3 file directly from the Amazon Polly AWS console. 
+2. Speechmarks: The JSON array that defines the viseme speechmarks that shape the host's mouth to match the sounds it is making. You can use the code that's already in the Amazon Sumerian Hosts repo to preprocess them by running it on an AWS Lambda NodeJS function or run a NodeJS function locally. The code itself is pasted below:
+```javascript
+const synthesizeSpeechmarks = (text, voiceId) => {
+  console.log(`Synthesizing speechmarks for ${text} with voice: ${voiceId}`);
+  const params = {
+    OutputFormat: "json",
+    SpeechMarkTypes: ["sentence", "ssml", "viseme", "word"],
+    SampleRate: "22050",
+    Text: text,
+    TextType: "ssml",
+    VoiceId: voiceId,
+  };
+  return polly
+    .synthesizeSpeech(params)
+    .promise()
+    .then((result) => {
+      // Convert charcodes to string
+      const jsonString = JSON.stringify(result.AudioStream);
+      const json = JSON.parse(jsonString);
+      const dataStr = json.data.map((c) => String.fromCharCode(c)).join("");
+
+      const markTypes = {
+        sentence: [],
+        word: [],
+        viseme: [],
+        ssml: [],
+      };
+      const endMarkTypes = {
+        sentence: null,
+        word: null,
+        viseme: null,
+        ssml: null,
+      };
+
+      // Split by enclosing {} to create speechmark objects
+      const speechMarks = [...dataStr.matchAll(/\{.*?\}(?=\n|$)/gm)].map(
+        (match) => {
+          const mark = JSON.parse(match[0]);
+
+          // Set the duration of the last speechmark stored matching this one's type
+          const numMarks = markTypes[mark.type].length;
+          if (numMarks > 0) {
+            const lastMark = markTypes[mark.type][numMarks - 1];
+            lastMark.duration = mark.time - lastMark.time;
+          }
+
+          markTypes[mark.type].push(mark);
+          endMarkTypes[mark.type] = mark;
+          return mark;
+        }
+      );
+
+      // Find the time of the latest speechmark
+      const endTimes = [];
+      if (endMarkTypes.sentence) {
+        endTimes.push(endMarkTypes.sentence.time);
+      }
+      if (endMarkTypes.word) {
+        endTimes.push(endMarkTypes.word.time);
+      }
+      if (endMarkTypes.viseme) {
+        endTimes.push(endMarkTypes.viseme.time);
+      }
+      if (endMarkTypes.ssml) {
+        endTimes.push(endMarkTypes.ssml.time);
+      }
+      const endTime = Math.max(...endTimes);
+
+      // Calculate duration for the ending speechMarks of each type
+      if (endMarkTypes.sentence) {
+        endMarkTypes.sentence.duration = Math.max(
+          0.05,
+          endTime - endMarkTypes.sentence.time
+        );  
+      }
+      if (endMarkTypes.word) {
+        endMarkTypes.word.duration = Math.max(
+          0.05,
+          endTime - endMarkTypes.word.time
+        );
+      }
+      if (endMarkTypes.viseme) {
+        endMarkTypes.viseme.duration = Math.max(
+          0.05,
+          endTime - endMarkTypes.viseme.time
+        );
+      }
+      if (endMarkTypes.ssml) {
+        endMarkTypes.ssml.duration = Math.max(
+          0.05,
+          endTime - endMarkTypes.ssml.time
+        );
+      }
+
+      return speechMarks;
+    });
+};
+```
+
+---
+Below is the same as the forked repo.
 # Amazon Sumerian Hosts
 
 Amazon Sumerian Hosts is an experimental open source project that aims to make it easy to create interactive animated 3D characters that can be rendered on the Web and leverage AWS Services such as [Amazon Polly](https://aws.amazon.com/polly/). It defines a Javascript API for managing animations, synthesizing and playing speech with Amazon Polly, and generating lipsync animation at runtime in sync with Polly generated audio. The core API can be extended to support the Web rendering engine of your choice. We have included support for both [three.js](https://threejs.org/) and [Babylon.js](https://www.babylonjs.com/) as examples of how to do this.

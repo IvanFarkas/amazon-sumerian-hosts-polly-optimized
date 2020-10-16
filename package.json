@@ -1,5 +1,5 @@
 {
-  "name": "amazon-sumerian-hosts",
+  "name": "amazon-sumerian-hosts-polly-optimized",
   "version": "1.3.2",
   "description": "",
   "scripts": {
@@ -16,7 +16,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aws-samples/amazon-sumerian-hosts.git"
+    "url": "git+https://github.com/aws-samples/amazon-sumerian-hosts-polly-optimized.git"
   },
   "devDependencies": {
     "@babel/core": "^7.8.4",
@@ -47,7 +47,7 @@
     "regenerator-runtime": "^0.13.5",
     "three": "^0.115.0",
     "webpack": "^4.41.6",
-    "webpack-cli": "^3.3.11",
+    "webpack-cli": "^3.3.12",
     "webpack-dev-server": "^3.10.3",
     "webpack-merge": "^4.2.2"
   },
