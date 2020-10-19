@@ -16,7 +16,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aws-samples/amazon-sumerian-hosts-polly-optimized.git"
+    "url": "git+https://github.com/ranilian/amazon-sumerian-hosts-polly-optimized.git"
   },
   "devDependencies": {
     "@babel/core": "^7.8.4",
