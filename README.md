@@ -2,8 +2,9 @@
 This fork modifies the Amazon Sumerian Hosts repository by providing (optional) additional Config properties that allow the user to reference the Audio File and the Speech Marks when calling the `host.TextToSpeechFeature.play` function. 
 
 ## Why would you want that?
-This was driven by a customer project that had a large number of users interacting with Amazon Sumerian Hosts and as such the cost of interacting with Amazon Polly grew significantly. Since the text is mostly static (doesn't change) we realized that we can optimize the costs of Polly by pre-processing the Audio File (MP3) and the Speech Marks (JSON), store them on Amazon S3, and have the client download them and use them (Amazon S3 costs are quite cheap in comparison to Amazon Polly and can be further optimized by serving them through CloudFront). We saved the customer roughly about 90% of their AWS costs by preprocessing, storing, and caching content at S3/CloudFront instead of querying Amazon Polly for every user. Read the [Medium](https://medium.com/@ranilian/amazon-sumerian-hosts-how-to-reduce-your-amazon-polly-cost-eb13db90a47d) article to learn more.
+This was driven by a customer project that had a large number of users interacting with Amazon Sumerian Hosts and as such the cost of interacting with Amazon Polly grew significantly. Since the text is mostly static (doesn't change) we realized that we can optimize the costs of Polly by pre-processing the Audio File (MP3) and the Speech Marks (JSON), store them on Amazon S3, and have the client download them and use them (Amazon S3 costs are quite cheap in comparison to Amazon Polly and can be further optimized by serving them through CloudFront). We saved the customer roughly about 90% of their AWS costs by preprocessing, storing, and caching content at S3/CloudFront instead of querying Amazon Polly for every user.
 
+Read the [Medium](https://medium.com/@ranilian/amazon-sumerian-hosts-how-to-reduce-your-amazon-polly-cost-eb13db90a47d) article to learn more.
 ## How do I install it?
 ```npm install amazon-sumerian-hosts-polly-optimized```
 
