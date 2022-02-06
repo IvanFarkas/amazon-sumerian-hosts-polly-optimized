@@ -81,10 +81,10 @@ class TextToSpeechFeature extends CoreTextToSpeechFeature {
             () => {
               resolve(result);
             },
-            {streaming: false, skipCodecCheck: true}
+            {streaming: true, skipCodecCheck: true}
           );
 
-          if (this._attachTo !== undefined) {
+          if (this._attachTo !== undefined && !this._isGlobal) {
             result.audio.attachToMesh(this._attachTo);
           }
         });

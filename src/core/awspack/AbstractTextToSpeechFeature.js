@@ -147,6 +147,8 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
    * duration property set to.
    * @param {number} [options.volume=1] - The default volume to play speech audio
    * with.
+   * @param {boolean} [options.isGlobal=false] - Whether the audio source should default
+   * to global regardless of whether or not it is attached to an object.
    */
   constructor(
     host,
@@ -159,6 +161,7 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
       speechmarkOffset: 0,
       minEndMarkDuration: 0.05,
       volume: 1,
+      isGlobal: false,
     }
   ) {
     super(host);
@@ -176,6 +179,7 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
     this.volume = Number.isNaN(Number(options.volume))
       ? 1
       : Number(options.volume);
+    this._isGlobal = options.isGlobal || false;
     this._promises = {
       volume: Deferred.resolve(),
     };
@@ -210,9 +214,9 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
   static initializeService(polly, presigner, version) {
     // Make sure all were defined
     if (
-      polly === undefined
-      || presigner === undefined
-      || version === undefined
+      polly === undefined ||
+      presigner === undefined ||
+      version === undefined
     ) {
       throw new Error(
         'Cannot initialize TextToSpeech feature. All arguments must be defined.'
@@ -263,8 +267,8 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
 
         response.Voices.forEach(voice => {
           if (
-            voice.SupportedEngines.includes('standard')
-            || version >= minNeuralSdk
+            voice.SupportedEngines.includes('standard') ||
+            version >= minNeuralSdk
           ) {
             availableVoices.push(voice);
           }
@@ -379,8 +383,8 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
   _validateEngine(engine) {
     // Default to the standard engine if neural is not available for this version
     if (
-      engine === undefined
-      || this.constructor.AWS_VERSION < this.constructor.POLLY_MIN_NEURAL_VERSION
+      engine === undefined ||
+      this.constructor.AWS_VERSION < this.constructor.POLLY_MIN_NEURAL_VERSION
     ) {
       engine = this.constructor.POLLY_DEFAULTS.Engine;
     }
@@ -419,8 +423,8 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
   _validateRate(rate) {
     // Use default if specified sample rate is not valid for the audio format
     if (
-      rate === undefined
-      || !sampleRates[this._audioFormat].rates.includes(rate)
+      rate === undefined ||
+      !sampleRates[this._audioFormat].rates.includes(rate)
     ) {
       rate = sampleRates[this._audioFormat].defaults[this._engine];
     }
@@ -614,10 +618,10 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
     const speech = this._speechCache[text] || {};
     // Exit if nothing has changed and force is false
     if (
-      !force
-      && config !== undefined
-      && speech.config
-      && JSON.stringify(config) === JSON.stringify(speech.config)
+      !force &&
+      config !== undefined &&
+      speech.config &&
+      JSON.stringify(config) === JSON.stringify(speech.config)
     ) {
       return speech;
     }
@@ -636,6 +640,7 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
 
     // Generate audio and speechmarks
     speech.config = config;
+
     // Skip Polly if audio and speechmarks are pre-processed
     if(config.AudioURL && config.SpeechMarksJSON) {
       speech.promise = this._synthesizeAudio({ UseS3: true, name: text, url: config.AudioURL })
@@ -679,15 +684,16 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
    * @returns {Deferred} Resolves with an object containing the audio URL.
    */
   _synthesizeAudio(params) {
-    if(params.UseS3)
+    if (params.UseS3) {
       return Promise.resolve(params);
+    }
 
     return new Deferred((resolve, reject) => {
       this.constructor.SERVICES.presigner.getSynthesizeSpeechUrl(
         params,
-        function (error, url) {
+        (error, url) => {
           if (!error) {
-            resolve({ url });
+            resolve({url});
           } else {
             reject(error);
           }
@@ -963,7 +969,7 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
       this,
       'volume',
       volume,
-      { seconds, easingFn }
+      {seconds, easingFn}
     );
 
     return this._promises.volume;
@@ -1041,9 +1047,15 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
     const currentPromise = this._currentPromise || {
       play: new Deferred(
         undefined,
-        () => { currentPromise.speech.cancel(); },
-        () => { currentPromise.speech.cancel(); },
-        () => { currentPromise.speech.cancel(); }
+        () => {
+          currentPromise.speech.cancel();
+        },
+        () => {
+          currentPromise.speech.cancel();
+        },
+        () => {
+          currentPromise.speech.cancel();
+        }
       ),
       speech: new Deferred(),
     };
@@ -1070,8 +1082,10 @@ class AbstractTextToSpeechFeature extends AbstractHostFeature {
         if (this._currentSpeech && this._currentSpeech.playing) {
           if (playMethod === 'play') {
             this._currentSpeech.cancel();
-          } else if (playMethod === 'resume'
-            && this._currentSpeech.audio !== speech.audio) {
+          } else if (
+            playMethod === 'resume' &&
+            this._currentSpeech.audio !== speech.audio
+          ) {
             this._currentSpeech.cancel();
           }
         }
